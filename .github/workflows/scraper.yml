@@ -1,0 +1,61 @@
+name: RanobeLIB Scraper
+
+on:
+  workflow_dispatch:
+    inputs:
+      book_url:
+        description: 'Target Book URL'
+        required: true
+
+      team_names:
+        description: 'Priority Teams'
+        required: false
+
+      start_chapter:
+        description: 'Lower Chapter Bound'
+        required: true
+
+      end_chapter:
+        description: 'Upper Chapter Bound'
+        required: true
+
+      extended_debug:
+        description: 'Enable Extended Debug Logging'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+
+      - name: Install Dependencies
+        run: |
+          npm install playwright
+          npx playwright install chromium --with-deps
+
+      - name: Discover Links
+        env:
+          EXTENDED_DEBUG: ${{ inputs.extended_debug }}
+        run: node discovery.js "${{ inputs.book_url }}" "${{ inputs.team_names }}" "${{ inputs.start_chapter }}" "${{ inputs.end_chapter }}"
+
+      - name: Extract Content
+        env:
+          EXTENDED_DEBUG: ${{ inputs.extended_debug }}
+        run: node extractor.js
+
+      - name: Upload Output
+        if: success()
+        uses: actions/upload-artifact@v6
+        with:
+          name: chapters-text
+          path: output/
+          retention-days: 1
