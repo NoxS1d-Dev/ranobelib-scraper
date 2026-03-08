@@ -11,19 +11,15 @@ on:
         description: 'Priority Teams'
         required: false
 
-      start_chapter:
-        description: 'Lower Chapter Bound'
+      chapters_range:
+        description: 'Chapters'
         required: true
 
-      end_chapter:
-        description: 'Upper Chapter Bound'
-        required: true
-
-      extended_debug:
-        description: 'Enable Extended Debug Logging'
+      merge_chapters:
+        description: 'Merge all Chapters Into a Single File'
         required: false
         type: boolean
-        default: false
+        default: true
 
 jobs:
   scrape:
@@ -39,21 +35,18 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          npm install playwright
+          npm install playwright playwright-extra puppeteer-extra-plugin-stealth
           npx playwright install chromium --with-deps
 
       - name: Discover Links
-        env:
-          EXTENDED_DEBUG: ${{ inputs.extended_debug }}
-        run: node discovery.js "${{ inputs.book_url }}" "${{ inputs.team_names }}" "${{ inputs.start_chapter }}" "${{ inputs.end_chapter }}"
+        run: node discovery.js "${{ inputs.book_url }}" "${{ inputs.team_names }}" "${{ inputs.chapters_range }}"
 
-      - name: Extract Content
+      - name: Extract Chapters
         env:
-          EXTENDED_DEBUG: ${{ inputs.extended_debug }}
-        run: node extractor.js
+          MERGE_CHAPTERS: ${{ inputs.merge_chapters }}
+        run: node extractor.js "${{ inputs.book_url }}"
 
       - name: Upload Output
-        if: success()
         uses: actions/upload-artifact@v6
         with:
           name: chapters-text
