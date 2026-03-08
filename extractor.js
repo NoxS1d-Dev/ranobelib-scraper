@@ -1,55 +1,78 @@
-const { initBrowser, loadJson, sleep } = require('./utils');
-const { logInfo, logDebug, logError } = require('./debug');
 const fs = require('fs');
 const path = require('path');
+const { extractBookSlug, createBrowser } = require('./utils');
 
 async function extract() {
-    const chapters = loadJson('chapters.json');
-    if (!chapters) {
-        logError('chapters.json not found!');
+    const rawUrl = process.argv[2];
+    if (!rawUrl || !fs.existsSync('chapters.json')) {
         process.exit(1);
     }
 
-    const { browser, page } = await initBrowser();
+    const chaptersData = JSON.parse(fs.readFileSync('chapters.json', 'utf8'));
+    const bookSlug = extractBookSlug(rawUrl);
+    const baseUrl = rawUrl.split('?')[0];
+    const isMergeEnabled = process.env.MERGE_CHAPTERS === 'true';
+    let mergedContent = '';
+
     const outputDir = path.join(__dirname, 'output');
-    if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir);
+    if (!fs.existsSync(outputDir)) {
+        fs.mkdirSync(outputDir, { recursive: true });
+    }
+
+    const browser = await createBrowser();
+    const context = await browser.newContext();
+    const page = await context.newPage();
 
     try {
-        logInfo(`Starting download of ${chapters.length} chapters...`);
-        
-        for (const chapter of chapters) {
-            const { chNum, url, team } = chapter;
-            logInfo(`Processing Chapter ${chNum}`);
-            logDebug(`Target URL: ${url} | Team: ${team}`);
-            
-            await page.goto(url, { waitUntil: 'networkidle', timeout: 60000 });
-            await sleep(2000);
+        await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
+        await page.waitForTimeout(6000); 
+    } catch (e) {}
 
-            const content = await page.evaluate(() => {
-                const contentNode = document.querySelector('.node-doc.text-content');
-                
-                if (!contentNode) return null;
+    for (const chap of chaptersData) {
+        const apiUrl = `https://api.cdnlibs.org/api/manga/${bookSlug}/chapter?branch_id=${chap.branch_id}&number=${chap.chapter}&volume=${chap.volume}`;
 
-                let lines = contentNode.innerText.split('\n')
-                    .map(line => line.trim())
-                    .filter(line => line.length > 0);
-                
-                return lines.join('\n');
-            });
+        try {
+            const result = await page.evaluate(async (url) => {
+                const res = await fetch(url);
+                if (!res.ok) return { error: true };
+                return { data: await res.json() };
+            }, apiUrl);
 
-            if (content) {
-                fs.writeFileSync(path.join(outputDir, `chapter_${chNum}.txt`), content);
-                logDebug(`Saved text to: chapter_${chNum}.txt`);
-            } else {
-                logInfo(`Skipped chapter ${chNum}. Text element not found.`);
+            if (result.error || !result.data) continue;
+
+            let fullText = "";
+            const doc = result.data.data?.content || result.data.content;
+
+            if (doc?.content && Array.isArray(doc.content)) {
+                for (const block of doc.content) {
+                    if (block.type === "paragraph" && block.content) {
+                        fullText += block.content
+                            .filter(item => item.type === "text")
+                            .map(item => item.text)
+                            .join("") + "\n";
+                    }
+                }
             }
-        }
-    } catch (err) {
-        logError(err.message);
-    } finally {
-        await browser.close();
-        logInfo('Extraction task finished.');
+
+            const cleanText = fullText.trim();
+            if (cleanText) {
+                fs.writeFileSync(path.join(outputDir, `chapter_${chap.chapter}.txt`), cleanText);
+
+                if (isMergeEnabled) {
+                    mergedContent += `\n\n=== ${chap.chapter} ===\n\n${cleanText}`;
+                }
+            }
+
+        } catch (error) {}
+
+        await page.waitForTimeout(Math.floor(Math.random() * 3000) + 2000);
     }
+
+    if (isMergeEnabled && mergedContent.trim() !== "") {
+        fs.writeFileSync(path.join(outputDir, 'book.txt'), mergedContent.trim());
+    }
+
+    await browser.close();
 }
 
 extract();

@@ -1,30 +1,20 @@
-const { chromium } = require('playwright');
-const fs = require('fs');
+const { chromium } = require('playwright-extra');
+const stealth = require('puppeteer-extra-plugin-stealth')();
 
-async function initBrowser() {
-    const browser = await chromium.launch({ 
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
-    });
+chromium.use(stealth);
 
-    const page = await browser.newPage({
-        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-    });
-
-    return { browser, page };
+function extractBookSlug(url) {
+    let path = url.split('?')[0];
+    path = path.replace(/^https?:\/\/[^/]+\/ru\//, '');
+    path = path.replace(/^(?:book|manga)\//, '');
+    return path.split('/')[0];
 }
 
-function saveJson(filename, data) {
-    fs.writeFileSync(filename, JSON.stringify(data, null, 2));
+async function createBrowser() {
+    return await chromium.launch({ headless: true });
 }
 
-function loadJson(filename) {
-    if (!fs.existsSync(filename)) return null;
-    return JSON.parse(fs.readFileSync(filename, 'utf8'));
-}
-
-function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-module.exports = { initBrowser, saveJson, loadJson, sleep };
+module.exports = {
+    extractBookSlug,
+    createBrowser
+};

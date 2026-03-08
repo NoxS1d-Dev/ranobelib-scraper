@@ -1,118 +1,122 @@
-const { initBrowser, saveJson, sleep } = require('./utils');
-const { logInfo, logDebug, logError } = require('./debug');
+const fs = require('fs');
+const { createBrowser } = require('./utils');
+
+function isTargetChapter(chapterNumber, rangeString) {
+    if (!rangeString || rangeString.trim() === "") return true;
+
+    const targetNum = parseFloat(chapterNumber);
+    if (isNaN(targetNum)) return false;
+
+    const parts = rangeString.split(',');
+
+    for (let part of parts) {
+        part = part.trim();
+        if (!part) continue;
+
+        if (part.includes('-')) {
+            const bounds = part.split('-').map(n => parseFloat(n.trim()));
+            if (bounds.length === 2 && !isNaN(bounds[0]) && !isNaN(bounds[1])) {
+                if (targetNum >= Math.min(...bounds) && targetNum <= Math.max(...bounds)) {
+                    return true;
+                }
+            }
+        } else {
+            if (!isNaN(parseFloat(part)) && targetNum === parseFloat(part)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
 
 async function discover() {
     const rawUrl = process.argv[2];
-    const teamInput = process.argv[3] || "";
-    const teams = teamInput.split(',')
-        .map(t => t.trim().toLowerCase())
-        .filter(t => t.length > 0); 
+    if (!rawUrl) process.exit(1);
 
-    const startCh = parseFloat(process.argv[4]);
-    const endCh = parseFloat(process.argv[5]);
-
-    const minCh = Math.min(startCh, endCh);
-    const maxCh = Math.max(startCh, endCh);
+    const teamNamesStr = process.argv[3] || "";
+    const chaptersRange = process.argv[4] || "";
 
     const baseUrl = rawUrl.split('?')[0];
     const chaptersUrl = `${baseUrl}?section=chapters`;
 
-    logDebug(`Target URL: ${chaptersUrl}`);
-    logDebug(`Range: ${minCh} to ${maxCh}`);
-    logDebug(`Team Priorities: ${teams.length > 0 ? teams.join(' > ') : 'None (First available)'}`);
+    const priorityTeams = teamNamesStr.split(',')
+        .map(t => t.trim().toLowerCase())
+        .filter(t => t.length > 0);
 
-    const { browser, page } = await initBrowser();
+    const browser = await createBrowser();
+    const context = await browser.newContext();
+    const page = await context.newPage();
 
-    const selectedLinks = new Map();
-    const seenUrls = new Set();
-    let scanComplete = false;
-    let lowestLegitSeen = Infinity;
-    let scrollAttempts = 0;
+    let rawChaptersData = null;
+
+    page.on('response', async (response) => {
+        const url = response.url();
+        const resourceType = response.request().resourceType();
+
+        if ((resourceType === 'fetch' || resourceType === 'xhr') && url.includes('/chapters')) {
+            try {
+                const json = await response.json();
+                if (json?.data && Array.isArray(json.data)) {
+                    rawChaptersData = json.data;
+                }
+            } catch (e) {}
+        }
+    });
 
     try {
-        logInfo('Loading page and starting chapters search...');
-        await page.goto(chaptersUrl, { waitUntil: 'networkidle', timeout: 60000 });
+        await page.goto(chaptersUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
+        for (let i = 0; i < 10; i++) {
+            if (rawChaptersData) break;
+            await page.waitForTimeout(1000);
+        }
+    } catch (e) {}
 
-        while (!scanComplete && scrollAttempts < 150) {
-            const rawElements = await page.$$eval('a[href*="/read/"]', nodes => 
-                nodes.map(n => ({ 
-                    href: n.href, 
-                    anchor: n.innerText.trim(),
-                    containerText: n.parentElement ? n.parentElement.innerText.toLowerCase() : ""
-                }))
-            );
+    if (!rawChaptersData) {
+        await browser.close();
+        process.exitCode = 1;
+        return;
+    }
 
-            const batch = [];
-            for (const el of rawElements) {
-                if (seenUrls.has(el.href)) continue;
-                const match = el.href.match(/\/c(\d+(\.\d+)?)/);
-                if (match) {
-                    batch.push({ ...el, chNum: parseFloat(match[1]) });
-                }
-            }
+    const selectedChapters = [];
 
-            for (let i = 0; i < batch.length; i++) {
-                const current = batch[i];
-                seenUrls.add(current.href);
-                
-                logDebug(`Found Chapter: ${current.chNum} | Anchor: ${current.anchor} | URL: ${current.href}`);
+    for (const chapter of rawChaptersData) {
+        if (!isTargetChapter(chapter.number, chaptersRange) || !chapter.branches?.length) {
+            continue;
+        }
 
-                if (current.chNum < lowestLegitSeen) lowestLegitSeen = current.chNum;
+        let bestBranch = chapter.branches[0];
+        let bestPriorityIndex = Infinity;
 
-                if (current.chNum >= minCh && current.chNum <= maxCh) {
-                    let priority = Infinity;
-                    let matchedTeam = "Default";
+        if (priorityTeams.length > 0) {
+            for (const branch of chapter.branches) {
+                if (!branch.teams?.length) continue;
 
-                    if (teams.length === 0) {
-                        priority = 0;
-                    } else {
-                        for (let j = 0; j < teams.length; j++) {
-                            if (current.anchor.toLowerCase().includes(teams[j]) || current.containerText.includes(teams[j])) {
-                                priority = j;
-                                matchedTeam = teams[j];
-                                break;
-                            }
+                const teamName = branch.teams[0].name.toLowerCase();
+                const teamSlug = branch.teams[0].slug.toLowerCase();
+
+                for (let i = 0; i < priorityTeams.length; i++) {
+                    if (teamName.includes(priorityTeams[i]) || teamSlug.includes(priorityTeams[i])) {
+                        if (i < bestPriorityIndex) {
+                            bestPriorityIndex = i;
+                            bestBranch = branch;
                         }
                     }
-
-                    if (!selectedLinks.has(current.chNum) || priority < selectedLinks.get(current.chNum).priority) {
-                        selectedLinks.set(current.chNum, { url: current.href, team: matchedTeam, priority });
-                        logDebug(`Selecting Ch ${current.chNum} from [${matchedTeam}]`);
-                    }
                 }
             }
-
-            if (lowestLegitSeen <= minCh) {
-                logInfo('Chapter scan complete.');
-                scanComplete = true;
-            } else {
-                scrollAttempts++;
-                await page.evaluate(() => window.scrollBy(0, 1500));
-                await sleep(1500);
-            }
         }
 
-        if (selectedLinks.size === 0) {
-            throw new Error('Zero chapters discovered. Range might be invalid.');
-        }
-
-        const outputData = Array.from(selectedLinks.entries())
-            .sort((a, b) => a[0] - b[0])
-            .map(([chNum, data]) => ({
-                chNum,
-                url: data.url,
-                team: data.team
-            }));
-
-        saveJson('chapters.json', outputData);
-        logInfo(`Successfully saved ${outputData.length} links to chapters.json`);
-
-    } catch (err) {
-        logError(err.message);
-        process.exit(1);
-    } finally {
-        await browser.close();
+        selectedChapters.push({
+            chapter: chapter.number,
+            volume: chapter.volume,
+            branch_id: bestBranch.branch_id,
+            team: bestBranch.teams?.[0]?.name || "Unknown"
+        });
     }
+
+    selectedChapters.sort((a, b) => parseFloat(a.chapter) - parseFloat(b.chapter));
+    fs.writeFileSync('chapters.json', JSON.stringify(selectedChapters, null, 2));
+
+    await browser.close();
 }
 
 discover();
