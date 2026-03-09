@@ -61,10 +61,15 @@ async function extract() {
 
             const cleanText = fullText.trim();
             if (cleanText) {
-                fs.writeFileSync(path.join(outputDir, `chapter_${chap.chapter}.txt`), cleanText);
+                const contentWithHeader = `=== ${chap.chapter} (${chap.team}) ===\n\n${cleanText}`;
 
-                if (isMergeEnabled) {
-                    mergedContent += `\n\n=== ${chap.chapter} ===\n\n${cleanText}`;
+                fs.writeFileSync(path.join(outputDir, `chapter_${chap.chapter}.txt`), contentWithHeader);
+
+                if (isMergeEnabled && chaptersData.length > 1) {
+                    if (mergedContent !== '') {
+                        mergedContent += '\n\n';
+                    }
+                    mergedContent += contentWithHeader;
                 }
             }
 
@@ -73,7 +78,7 @@ async function extract() {
         await page.waitForTimeout(Math.floor(Math.random() * 3000) + 2000);
     }
 
-    if (isMergeEnabled && mergedContent.trim() !== "") {
+    if (isMergeEnabled && chaptersData.length > 1 && mergedContent.trim() !== "") {
         fs.writeFileSync(path.join(outputDir, 'book.txt'), mergedContent.trim());
     }
 
