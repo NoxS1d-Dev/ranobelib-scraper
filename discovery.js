@@ -48,7 +48,7 @@ async function discover() {
     console.log(`[INFO] Target Link: ${rawUrl}`);
     console.log(`[INFO] Priority Teams: ${priorityTeams.length > 0 ? priorityTeams.join(', ') : 'None'}`);
     console.log(`[INFO] Target Chapters: ${chaptersRange || 'All'}`);
-    console.log(`[INFO] Intercepting network requests for chapter data and slug...`);
+    console.log(`[INFO] Intercepting network requests for chapters and book metadata...`);
 
     const browser = await createBrowser();
     const context = await browser.newContext();
@@ -136,7 +136,7 @@ async function discover() {
     console.log(`[INFO] Saving chapter information to chapters.json...`);
     fs.writeFileSync('chapters.json', JSON.stringify(selectedChapters, null, 2));
 
-    console.log(`[INFO] Saving title information to info.json...`);
+    console.log(`[INFO] Saving book metadata to info.json...`);
     fs.writeFileSync('info.json', JSON.stringify({ slug: fetchedSlug }, null, 2));
 
     await browser.close();
