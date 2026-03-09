@@ -116,6 +116,7 @@ async function discover() {
         selectedChapters.push({
             chapter: chapter.number,
             volume: chapter.volume,
+            name: chapter.name || "",
             branch_id: bestBranch.branch_id,
             team: bestBranch.teams?.[0]?.name || "Unknown"
         });
