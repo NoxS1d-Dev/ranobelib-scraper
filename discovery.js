@@ -45,12 +45,10 @@ async function discover() {
 
     const bookSlug = extractBookSlug(rawUrl);
     const bookName = bookSlug.replace(/^\d+--/, '');
-    const isMergeEnabled = process.env.MERGE_CHAPTERS === 'true';
 
     console.log(`[INFO] Target Book: ${bookName}`);
     console.log(`[INFO] Priority Teams: ${priorityTeams.length > 0 ? priorityTeams.join(', ') : 'None'}`);
     console.log(`[INFO] Target Chapters: ${chaptersRange || 'All'}`);
-    console.log(`[INFO] Merge Chapters: ${isMergeEnabled ? 'Enabled' : 'Disabled'}`);
     console.log(`[INFO] Intercepting network requests for chapter data...`);
 
     const browser = await createBrowser();
