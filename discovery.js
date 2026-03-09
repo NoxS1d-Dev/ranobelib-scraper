@@ -1,5 +1,5 @@
 const fs = require('fs');
-const { createBrowser } = require('./utils');
+const { createBrowser, extractBookSlug } = require('./utils');
 
 function isTargetChapter(chapterNumber, rangeString) {
     if (!rangeString || rangeString.trim() === "") return true;
@@ -42,6 +42,16 @@ async function discover() {
     const priorityTeams = teamNamesStr.split(',')
         .map(t => t.trim().toLowerCase())
         .filter(t => t.length > 0);
+
+    const bookSlug = extractBookSlug(rawUrl);
+    const bookName = bookSlug.replace(/^\d+--/, '');
+    const isMergeEnabled = process.env.MERGE_CHAPTERS === 'true';
+
+    console.log(`[INFO] Target Book: ${bookName}`);
+    console.log(`[INFO] Priority Teams: ${priorityTeams.length > 0 ? priorityTeams.join(', ') : 'None'}`);
+    console.log(`[INFO] Target Chapters: ${chaptersRange || 'All'}`);
+    console.log(`[INFO] Merge Chapters: ${isMergeEnabled ? 'Enabled' : 'Disabled'}`);
+    console.log(`[INFO] Intercepting network requests for chapter data...`);
 
     const browser = await createBrowser();
     const context = await browser.newContext();
@@ -114,6 +124,8 @@ async function discover() {
     }
 
     selectedChapters.sort((a, b) => parseFloat(a.chapter) - parseFloat(b.chapter));
+
+    console.log(`[INFO] Saving chapter information to chapters.json...`);
     fs.writeFileSync('chapters.json', JSON.stringify(selectedChapters, null, 2));
 
     await browser.close();
