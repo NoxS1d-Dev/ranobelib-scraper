@@ -62,7 +62,7 @@ async function extract() {
             const cleanText = fullText.trim();
             if (cleanText) {
                 const chapterTitle = chap.name ? ` - ${chap.name}` : "";
-                const contentWithHeader = `**Volume ${chap.volume} Chapter ${chap.chapter}${chapterTitle} - ${chap.team}**\n\n${cleanText}`;
+                const contentWithHeader = `Volume ${chap.volume} Chapter ${chap.chapter}${chapterTitle} - ${chap.team}\n\n${cleanText}`;
 
                 fs.writeFileSync(path.join(outputDir, `chapter_${chap.chapter}.txt`), contentWithHeader);
 
