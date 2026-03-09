@@ -44,42 +44,51 @@ async function discover() {
         .filter(t => t.length > 0);
 
     const bookSlug = extractBookSlug(rawUrl);
-    const bookName = bookSlug.replace(/^\d+--/, '');
 
-    console.log(`[INFO] Target Book: ${bookName}`);
+    console.log(`[INFO] Target Link: ${rawUrl}`);
     console.log(`[INFO] Priority Teams: ${priorityTeams.length > 0 ? priorityTeams.join(', ') : 'None'}`);
     console.log(`[INFO] Target Chapters: ${chaptersRange || 'All'}`);
-    console.log(`[INFO] Intercepting network requests for chapter data...`);
+    console.log(`[INFO] Intercepting network requests for chapter data and slug...`);
 
     const browser = await createBrowser();
     const context = await browser.newContext();
     const page = await context.newPage();
 
     let rawChaptersData = null;
+    let fetchedSlug = null;
 
     page.on('response', async (response) => {
         const url = response.url();
         const resourceType = response.request().resourceType();
 
-        if ((resourceType === 'fetch' || resourceType === 'xhr') && url.includes('/chapters')) {
-            try {
-                const json = await response.json();
-                if (json?.data && Array.isArray(json.data)) {
-                    rawChaptersData = json.data;
-                }
-            } catch (e) {}
+        if (resourceType === 'fetch' || resourceType === 'xhr') {
+            if (url.includes('/chapters')) {
+                try {
+                    const json = await response.json();
+                    if (json?.data && Array.isArray(json.data)) {
+                        rawChaptersData = json.data;
+                    }
+                } catch (e) {}
+            } else if (url.includes(bookSlug)) {
+                try {
+                    const json = await response.json();
+                    if (json?.data && json.data.slug) {
+                        fetchedSlug = json.data.slug;
+                    }
+                } catch (e) {}
+            }
         }
     });
 
     try {
         await page.goto(chaptersUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
         for (let i = 0; i < 10; i++) {
-            if (rawChaptersData) break;
+            if (rawChaptersData && fetchedSlug) break;
             await page.waitForTimeout(1000);
         }
     } catch (e) {}
 
-    if (!rawChaptersData) {
+    if (!rawChaptersData || !fetchedSlug) {
         await browser.close();
         process.exitCode = 1;
         return;
@@ -126,6 +135,9 @@ async function discover() {
 
     console.log(`[INFO] Saving chapter information to chapters.json...`);
     fs.writeFileSync('chapters.json', JSON.stringify(selectedChapters, null, 2));
+
+    console.log(`[INFO] Saving title information to info.json...`);
+    fs.writeFileSync('info.json', JSON.stringify({ slug: fetchedSlug }, null, 2));
 
     await browser.close();
 }

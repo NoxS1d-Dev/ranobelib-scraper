@@ -4,11 +4,12 @@ const { extractBookSlug, createBrowser } = require('./utils');
 
 async function extract() {
     const rawUrl = process.argv[2];
-    if (!rawUrl || !fs.existsSync('chapters.json')) {
+    if (!rawUrl || !fs.existsSync('chapters.json') || !fs.existsSync('info.json')) {
         process.exit(1);
     }
 
     const chaptersData = JSON.parse(fs.readFileSync('chapters.json', 'utf8'));
+    const infoData = JSON.parse(fs.readFileSync('info.json', 'utf8'));
     const bookSlug = extractBookSlug(rawUrl);
     const baseUrl = rawUrl.split('?')[0];
     const isMergeEnabled = process.env.MERGE_CHAPTERS === 'true';
@@ -80,7 +81,7 @@ async function extract() {
     }
 
     if (isMergeEnabled && chaptersData.length > 1 && mergedContent.trim() !== "") {
-        fs.writeFileSync(path.join(outputDir, 'book.txt'), mergedContent.trim());
+        fs.writeFileSync(path.join(outputDir, `${infoData.slug}.txt`), mergedContent.trim());
     }
 
     await browser.close();
