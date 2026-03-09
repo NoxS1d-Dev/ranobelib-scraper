@@ -136,8 +136,8 @@ async function discover() {
     console.log(`[INFO] Saving chapter information to chapters.json...`);
     fs.writeFileSync('chapters.json', JSON.stringify(selectedChapters, null, 2));
 
-    console.log(`[INFO] Saving book metadata to info.json...`);
-    fs.writeFileSync('info.json', JSON.stringify({ slug: fetchedSlug }, null, 2));
+    console.log(`[INFO] Saving book metadata to metadata.json...`);
+    fs.writeFileSync('metadata.json', JSON.stringify({ slug: fetchedSlug }, null, 2));
 
     await browser.close();
 }

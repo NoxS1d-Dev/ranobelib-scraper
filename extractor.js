@@ -4,20 +4,27 @@ const { extractBookSlug, createBrowser } = require('./utils');
 
 async function extract() {
     const rawUrl = process.argv[2];
-    if (!rawUrl || !fs.existsSync('chapters.json') || !fs.existsSync('info.json')) {
+    if (!rawUrl || !fs.existsSync('chapters.json') || !fs.existsSync('metadata.json')) {
         process.exit(1);
     }
 
     const chaptersData = JSON.parse(fs.readFileSync('chapters.json', 'utf8'));
-    const infoData = JSON.parse(fs.readFileSync('info.json', 'utf8'));
+    const metaData = JSON.parse(fs.readFileSync('metadata.json', 'utf8'));
     const bookSlug = extractBookSlug(rawUrl);
     const baseUrl = rawUrl.split('?')[0];
     const isMergeEnabled = process.env.MERGE_CHAPTERS === 'true';
     let mergedContent = '';
 
+    console.log(`[INFO] Merge Chapters Configuration: ${isMergeEnabled ? 'Enabled' : 'Disabled'}`);
+
     const outputDir = path.join(__dirname, 'output');
+    const chaptersOutputDir = isMergeEnabled ? path.join(outputDir, 'chapters') : outputDir;
+
     if (!fs.existsSync(outputDir)) {
         fs.mkdirSync(outputDir, { recursive: true });
+    }
+    if (!fs.existsSync(chaptersOutputDir)) {
+        fs.mkdirSync(chaptersOutputDir, { recursive: true });
     }
 
     const browser = await createBrowser();
@@ -30,6 +37,7 @@ async function extract() {
     } catch (e) {}
 
     for (const chap of chaptersData) {
+        console.log(`[INFO] Fetching content for chapter ${chap.chapter} from API...`);
         const apiUrl = `https://api.cdnlibs.org/api/manga/${bookSlug}/chapter?branch_id=${chap.branch_id}&number=${chap.chapter}&volume=${chap.volume}`;
 
         try {
@@ -65,7 +73,9 @@ async function extract() {
                 const chapterTitle = chap.name ? ` - ${chap.name}` : "";
                 const contentWithHeader = `Volume ${chap.volume} Chapter ${chap.chapter}${chapterTitle} - ${chap.team}\n\n${cleanText}`;
 
-                fs.writeFileSync(path.join(outputDir, `chapter_${chap.chapter}.txt`), contentWithHeader);
+                const chapterFilename = `${metaData.slug}_${chap.chapter}.txt`;
+                fs.writeFileSync(path.join(chaptersOutputDir, chapterFilename), contentWithHeader);
+                console.log(`[INFO] Saved chapter ${chap.chapter} content to ${chapterFilename}`);
 
                 if (isMergeEnabled && chaptersData.length > 1) {
                     if (mergedContent !== '') {
@@ -81,7 +91,7 @@ async function extract() {
     }
 
     if (isMergeEnabled && chaptersData.length > 1 && mergedContent.trim() !== "") {
-        fs.writeFileSync(path.join(outputDir, `${infoData.slug}.txt`), mergedContent.trim());
+        fs.writeFileSync(path.join(outputDir, `${metaData.slug}.txt`), mergedContent.trim());
     }
 
     await browser.close();
