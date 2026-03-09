@@ -43,7 +43,12 @@ async function extract() {
             let fullText = "";
             const doc = result.data.data?.content || result.data.content;
 
-            if (doc?.content && Array.isArray(doc.content)) {
+            if (typeof doc === 'string') {
+                fullText = doc
+                    .replace(/<\/p>/gi, '\n')
+                    .replace(/<[^>]+>/g, '')
+                    .trim() + '\n';
+            } else if (doc?.content && Array.isArray(doc.content)) {
                 for (const block of doc.content) {
                     if (block.type === "paragraph" && block.content) {
                         fullText += block.content
