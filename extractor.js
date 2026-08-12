@@ -25,8 +25,8 @@ async function extract() {
     const parser = getParser(rawUrl)
 
     const browser = await createBrowser()
-    const context = await browser.newContext()
-    const page = await context.newPage()
+    let context = await browser.newContext()
+    let page = await context.newPage()
     
     try {
         const baseUrl = rawUrl.split('?')[0]
@@ -36,7 +36,25 @@ async function extract() {
         logDebug(`Base URL navigation timeout or error, proceeding anyway`)
     }
 
+    let count = 0
+
     for (const chap of chaptersData) {
+        if (count > 0 && count % 20 === 0) {
+            logDebug(`Recreating browser context to prevent memory leak...`)
+            await page.close()
+            await context.close()
+            context = await browser.newContext()
+            page = await context.newPage()
+            try {
+                const baseUrl = rawUrl.split('?')[0]
+                await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 60000 })
+                await page.waitForTimeout(2000)
+            } catch (e) {
+                logDebug(`Base URL navigation timeout or error on context recreation, proceeding anyway`)
+            }
+        }
+        count++
+
         logInfo(`Fetching content for chapter ${chap.chapter}...`)
 
         let fetchSuccess = false
@@ -66,17 +84,16 @@ async function extract() {
             break
         }
 
-        let header = ""
+        let contentWithHeader = ""
         if (rawUrl.includes('wuxiaworld')) {
-            header = `Volume ${chap.volume} Chapter ${chap.chapter}`
+            contentWithHeader = cleanText
         } else {
             const chapterTitle = chap.name ? ` - ${chap.name}` : ""
-            header = `Volume ${chap.volume} Chapter ${chap.chapter}${chapterTitle} - ${chap.team}`
+            const header = `Volume ${chap.volume} Chapter ${chap.chapter}${chapterTitle} - ${chap.team}`
+            contentWithHeader = `${header}\n\n${cleanText}`
         }
 
-        const contentWithHeader = `${header}\n\n${cleanText}`
         const chapterFilename = `${metadata.slug}_${chap.chapter}.txt`
-        
         fs.writeFileSync(path.join(chaptersOutputDir, chapterFilename), contentWithHeader)
 
         if (isMergeEnabled && chaptersData.length > 1) {

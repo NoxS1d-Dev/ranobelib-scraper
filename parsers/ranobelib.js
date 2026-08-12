@@ -11,7 +11,7 @@ const discover = async (page, rawUrl, chaptersRange, priorityTeams, isTargetChap
     const baseUrl = rawUrl.split('?')[0]
     const chaptersUrl = `${baseUrl}?section=chapters`
     const bookSlug = extractBookSlug(rawUrl)
-    
+
     let rawChaptersData = null
     let fetchedSlug = null
 
@@ -33,9 +33,9 @@ const discover = async (page, rawUrl, chaptersRange, priorityTeams, isTargetChap
             }
         }
     }
-    
+
     page.on('response', responseHandler)
-    
+
     try {
         await page.goto(chaptersUrl, { waitUntil: 'domcontentloaded', timeout: 60000 })
         let attempt = 0
@@ -45,7 +45,7 @@ const discover = async (page, rawUrl, chaptersRange, priorityTeams, isTargetChap
             attempt++
         }
     } catch (e) {}
-    
+
     page.off('response', responseHandler)
 
     if (!rawChaptersData || !fetchedSlug) return { chapters: [], metadata: null }
@@ -89,7 +89,7 @@ const discover = async (page, rawUrl, chaptersRange, priorityTeams, isTargetChap
 
 const extract = async (page, chap, metadata) => {
     const apiUrl = `https://api.cdnlibs.org/api/manga/${metadata.slug}/chapter?branch_id=${chap.branch_id}&number=${chap.chapter}&volume=${chap.volume}`
-    
+
     logDebug(`Requesting API: ${apiUrl}`)
     const result = await page.evaluate(async (url) => {
         const res = await fetch(url)

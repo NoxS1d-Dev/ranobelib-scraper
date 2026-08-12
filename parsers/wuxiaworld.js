@@ -97,10 +97,22 @@ const discover = async (page, rawUrl, chaptersRange, priorityTeams, isTargetChap
 const extract = async (page, chap) => {
     logDebug(`Navigating to chapter URL: ${chap.url}`)
     await page.goto(chap.url, { waitUntil: 'domcontentloaded', timeout: 60000 })
+    
+    const pageTitle = await page.evaluate(() => {
+        const h1 = document.querySelector('h1')
+        return h1 ? h1.innerText.trim() : ''
+    })
+
     const paragraphs = await page.$$eval('div#chapterText', divs => 
         divs.map(d => d.textContent.trim()).filter(t => t.length > 0)
     )
-    return paragraphs.join('\n\n')
+    
+    const text = paragraphs.join('\n\n')
+    
+    if (pageTitle) {
+        return `${pageTitle}\n\n${text}`
+    }
+    return text
 }
 
 module.exports = { discover, extract }

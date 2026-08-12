@@ -19,7 +19,7 @@ async function discover() {
     logInfo(`Target Chapters: ${chaptersRange || 'All'}`)
 
     const parser = getParser(rawUrl)
-    
+
     const browser = await createBrowser()
     const context = await browser.newContext()
     const page = await context.newPage()
@@ -42,7 +42,7 @@ async function discover() {
 
     logInfo(`Discovered ${chapters.length} chapters. Saving to chapters.json`)
     fs.writeFileSync('chapters.json', JSON.stringify(chapters, null, 2))
-    
+
     logInfo(`Saving book metadata to metadata.json`)
     fs.writeFileSync('metadata.json', JSON.stringify(metadata, null, 2))
 
