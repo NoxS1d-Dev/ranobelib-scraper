@@ -1,4 +1,4 @@
-name: RanobeLIB Scraper
+name: Scraper
 
 on:
   workflow_dispatch:
@@ -26,16 +26,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
-          node-version: '20'
+          node-version: '24'
 
       - name: Install Dependencies
         run: |
-          npm install playwright playwright-extra puppeteer-extra-plugin-stealth
+          npm install playwright
           npx playwright install chromium --with-deps
 
       - name: Discover Links
@@ -47,7 +47,7 @@ jobs:
         run: node extractor.js "${{ inputs.book_url }}"
 
       - name: Upload Output
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: chapters-text
           path: output/
