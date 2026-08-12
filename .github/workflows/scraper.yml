@@ -21,6 +21,12 @@ on:
         type: boolean
         default: true
 
+      extended_debug:
+        description: 'Enable Extended Debug Logging'
+        required: false
+        type: boolean
+        default: false
+
 jobs:
   scrape:
     runs-on: ubuntu-latest
@@ -39,11 +45,14 @@ jobs:
           npx playwright install chromium --with-deps
 
       - name: Discover Links
+        env:
+          EXTENDED_DEBUG: ${{ inputs.extended_debug }}
         run: node discovery.js "${{ inputs.book_url }}" "${{ inputs.team_names }}" "${{ inputs.chapters_range }}"
 
       - name: Extract Chapters
         env:
           MERGE_CHAPTERS: ${{ inputs.merge_chapters }}
+          EXTENDED_DEBUG: ${{ inputs.extended_debug }}
         run: node extractor.js "${{ inputs.book_url }}"
 
       - name: Upload Output
