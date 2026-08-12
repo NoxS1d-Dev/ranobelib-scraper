@@ -1,20 +1,38 @@
-const { chromium } = require('playwright-extra');
-const stealth = require('puppeteer-extra-plugin-stealth')();
+const { chromium } = require('playwright')
 
-chromium.use(stealth);
+function isTargetChapter(chapterNumber, rangeString) {
+    if (!rangeString || rangeString.trim() === "") return true
 
-function extractBookSlug(url) {
-    let path = url.split('?')[0];
-    path = path.replace(/^https?:\/\/[^/]+\/ru\//, '');
-    path = path.replace(/^(?:book|manga)\//, '');
-    return path.split('/')[0];
+    const targetNum = parseFloat(chapterNumber)
+    if (isNaN(targetNum)) return false
+
+    const parts = rangeString.split(',')
+
+    for (let part of parts) {
+        part = part.trim()
+        if (!part) continue
+
+        if (part.includes('-')) {
+            const bounds = part.split('-').map(n => parseFloat(n.trim()))
+            if (bounds.length === 2 && !isNaN(bounds[0]) && !isNaN(bounds[1])) {
+                if (targetNum >= Math.min(...bounds) && targetNum <= Math.max(...bounds)) {
+                    return true
+                }
+            }
+        } else {
+            if (!isNaN(parseFloat(part)) && targetNum === parseFloat(part)) {
+                return true
+            }
+        }
+    }
+    return false
 }
 
 async function createBrowser() {
-    return await chromium.launch({ headless: true });
+    return await chromium.launch({ headless: true })
 }
 
 module.exports = {
-    extractBookSlug,
+    isTargetChapter,
     createBrowser
-};
+}

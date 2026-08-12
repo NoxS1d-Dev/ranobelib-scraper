@@ -1,100 +1,91 @@
-const fs = require('fs');
-const path = require('path');
-const { extractBookSlug, createBrowser } = require('./utils');
+const fs = require('fs')
+const path = require('path')
+const { createBrowser } = require('./utils')
+const { getParser } = require('./router')
+const { logInfo, logError, logDebug } = require('./debug')
 
 async function extract() {
-    const rawUrl = process.argv[2];
+    const rawUrl = process.argv[2]
     if (!rawUrl || !fs.existsSync('chapters.json') || !fs.existsSync('metadata.json')) {
-        process.exit(1);
+        process.exit(1)
     }
 
-    const chaptersData = JSON.parse(fs.readFileSync('chapters.json', 'utf8'));
-    const metaData = JSON.parse(fs.readFileSync('metadata.json', 'utf8'));
-    const bookSlug = extractBookSlug(rawUrl);
-    const baseUrl = rawUrl.split('?')[0];
-    const isMergeEnabled = process.env.MERGE_CHAPTERS === 'true';
-    let mergedContent = '';
+    const chaptersData = JSON.parse(fs.readFileSync('chapters.json', 'utf8'))
+    const metadata = JSON.parse(fs.readFileSync('metadata.json', 'utf8'))
+    
+    const isMergeEnabled = process.env.MERGE_CHAPTERS === 'true'
+    let mergedContent = ''
 
-    console.log(`[INFO] Merge Chapters Configuration: ${isMergeEnabled ? 'Enabled' : 'Disabled'}`);
+    const outputDir = path.join(__dirname, 'output')
+    const chaptersOutputDir = isMergeEnabled ? path.join(outputDir, 'chapters') : outputDir
 
-    const outputDir = path.join(__dirname, 'output');
-    const chaptersOutputDir = isMergeEnabled ? path.join(outputDir, 'chapters') : outputDir;
+    if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true })
+    if (!fs.existsSync(chaptersOutputDir)) fs.mkdirSync(chaptersOutputDir, { recursive: true })
 
-    if (!fs.existsSync(outputDir)) {
-        fs.mkdirSync(outputDir, { recursive: true });
-    }
-    if (!fs.existsSync(chaptersOutputDir)) {
-        fs.mkdirSync(chaptersOutputDir, { recursive: true });
-    }
+    const parser = getParser(rawUrl)
 
-    const browser = await createBrowser();
-    const context = await browser.newContext();
-    const page = await context.newPage();
-
+    const browser = await createBrowser()
+    const context = await browser.newContext()
+    const page = await context.newPage()
+    
     try {
-        await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
-        await page.waitForTimeout(6000); 
-    } catch (e) {}
+        const baseUrl = rawUrl.split('?')[0]
+        await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 60000 })
+        await page.waitForTimeout(2000)
+    } catch (e) {
+        logDebug(`Base URL navigation timeout or error, proceeding anyway`)
+    }
 
     for (const chap of chaptersData) {
-        console.log(`[INFO] Fetching content for chapter ${chap.chapter} from API...`);
-        const apiUrl = `https://api.cdnlibs.org/api/manga/${bookSlug}/chapter?branch_id=${chap.branch_id}&number=${chap.chapter}&volume=${chap.volume}`;
+        logInfo(`Fetching content for chapter ${chap.chapter}...`)
 
-        try {
-            const result = await page.evaluate(async (url) => {
-                const res = await fetch(url);
-                if (!res.ok) return { error: true };
-                return { data: await res.json() };
-            }, apiUrl);
+        let fetchSuccess = false
+        let retryCount = 0
+        const maxRetries = 3
+        let cleanText = ""
 
-            if (result.error || !result.data) continue;
-
-            let fullText = "";
-            const doc = result.data.data?.content || result.data.content;
-
-            if (typeof doc === 'string') {
-                fullText = doc
-                    .replace(/<\/p>/gi, '\n')
-                    .replace(/<[^>]+>/g, '')
-                    .trim() + '\n';
-            } else if (doc?.content && Array.isArray(doc.content)) {
-                for (const block of doc.content) {
-                    if (block.type === "paragraph" && block.content) {
-                        fullText += block.content
-                            .filter(item => item.type === "text")
-                            .map(item => item.text)
-                            .join("") + "\n";
-                    }
+        while (retryCount < maxRetries && !fetchSuccess) {
+            try {
+                cleanText = await parser.extract(page, chap, metadata)
+                if (cleanText) {
+                    fetchSuccess = true
+                } else {
+                    retryCount++
+                    logDebug(`Attempt ${retryCount} failed. Retrying...`)
+                    await page.waitForTimeout(1000)
                 }
+            } catch (error) {
+                retryCount++
+                logDebug(`Attempt ${retryCount} threw an error. Retrying...`)
+                await page.waitForTimeout(1000)
             }
+        }
 
-            const cleanText = fullText.trim();
-            if (cleanText) {
-                const chapterTitle = chap.name ? ` - ${chap.name}` : "";
-                const contentWithHeader = `Volume ${chap.volume} Chapter ${chap.chapter}${chapterTitle} - ${chap.team}\n\n${cleanText}`;
+        if (!fetchSuccess || !cleanText) {
+            logError(`Failed to load chapter ${chap.chapter} after ${maxRetries} attempts. Stopping extraction.`)
+            break
+        }
 
-                const chapterFilename = `${metaData.slug}_${chap.chapter}.txt`;
-                fs.writeFileSync(path.join(chaptersOutputDir, chapterFilename), contentWithHeader);
-                console.log(`[INFO] Saved chapter ${chap.chapter} content to ${chapterFilename}`);
+        const chapterTitle = chap.name ? ` - ${chap.name}` : ""
+        const contentWithHeader = `Volume ${chap.volume} Chapter ${chap.chapter}${chapterTitle} - ${chap.team}\n\n${cleanText}`
 
-                if (isMergeEnabled && chaptersData.length > 1) {
-                    if (mergedContent !== '') {
-                        mergedContent += '\n\n';
-                    }
-                    mergedContent += contentWithHeader;
-                }
-            }
+        const chapterFilename = `${metadata.slug}_${chap.chapter}.txt`
+        fs.writeFileSync(path.join(chaptersOutputDir, chapterFilename), contentWithHeader)
 
-        } catch (error) {}
-
-        await page.waitForTimeout(Math.floor(Math.random() * 3000) + 2000);
+        if (isMergeEnabled && chaptersData.length > 1) {
+            if (mergedContent !== '') mergedContent += '\n\n'
+            mergedContent += contentWithHeader
+        }
     }
 
     if (isMergeEnabled && chaptersData.length > 1 && mergedContent.trim() !== "") {
-        fs.writeFileSync(path.join(outputDir, `${metaData.slug}.txt`), mergedContent.trim());
+        fs.writeFileSync(path.join(outputDir, `${metadata.slug}.txt`), mergedContent.trim())
+        logInfo(`Merged file saved successfully.`)
     }
 
-    await browser.close();
+    try {
+        await browser.close()
+    } catch (e) {}
 }
 
-extract();
+extract()
