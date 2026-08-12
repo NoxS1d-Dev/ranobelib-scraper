@@ -66,10 +66,17 @@ async function extract() {
             break
         }
 
-        const chapterTitle = chap.name ? ` - ${chap.name}` : ""
-        const contentWithHeader = `Volume ${chap.volume} Chapter ${chap.chapter}${chapterTitle} - ${chap.team}\n\n${cleanText}`
+        let header = ""
+        if (rawUrl.includes('wuxiaworld')) {
+            header = `Volume ${chap.volume} Chapter ${chap.chapter}`
+        } else {
+            const chapterTitle = chap.name ? ` - ${chap.name}` : ""
+            header = `Volume ${chap.volume} Chapter ${chap.chapter}${chapterTitle} - ${chap.team}`
+        }
 
+        const contentWithHeader = `${header}\n\n${cleanText}`
         const chapterFilename = `${metadata.slug}_${chap.chapter}.txt`
+        
         fs.writeFileSync(path.join(chaptersOutputDir, chapterFilename), contentWithHeader)
 
         if (isMergeEnabled && chaptersData.length > 1) {
