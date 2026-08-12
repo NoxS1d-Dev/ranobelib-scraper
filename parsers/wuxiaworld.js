@@ -5,7 +5,7 @@ function extractSlug(url) {
     path = path.replace(/\/$/, '')
     const parts = path.split('/')
     const lastPart = parts[parts.length - 1]
-    
+
     if (path.includes('/chapter/')) {
         return lastPart.replace(/-\d+$/, '')
     }
@@ -16,7 +16,7 @@ const discover = async (page, rawUrl, chaptersRange, priorityTeams, isTargetChap
     const slug = extractSlug(rawUrl)
     const chapters = []
     let novelUrl = rawUrl
-    
+
     if (rawUrl.includes('/chapter/')) {
         novelUrl = `https://wuxiaworld.eu/novel/${slug}`
     }
@@ -33,7 +33,7 @@ const discover = async (page, rawUrl, chaptersRange, priorityTeams, isTargetChap
             const urlParts = link.url.split('-')
             const chapterStr = urlParts[urlParts.length - 1]
             const chapterNum = parseFloat(chapterStr)
-            
+
             if (!isNaN(chapterNum) && isTargetChapter(chapterNum, chaptersRange)) {
                 chapters.push({
                     chapter: chapterNum,
@@ -55,7 +55,7 @@ const discover = async (page, rawUrl, chaptersRange, priorityTeams, isTargetChap
         for (let part of parts) {
             part = part.trim()
             if (!part) continue
-            
+
             if (part.includes('-')) {
                 const bounds = part.split('-').map(n => parseFloat(n.trim()))
                 if (bounds.length === 2 && !isNaN(bounds[0]) && !isNaN(bounds[1])) {
@@ -97,18 +97,18 @@ const discover = async (page, rawUrl, chaptersRange, priorityTeams, isTargetChap
 const extract = async (page, chap) => {
     logDebug(`Navigating to chapter URL: ${chap.url}`)
     await page.goto(chap.url, { waitUntil: 'domcontentloaded', timeout: 60000 })
-    
+
     const pageTitle = await page.evaluate(() => {
         const h1 = document.querySelector('h1')
         return h1 ? h1.innerText.trim() : ''
     })
 
-    const paragraphs = await page.$$eval('div#chapterText', divs => 
+    const paragraphs = await page.$$eval('div#chapterText', divs =>
         divs.map(d => d.textContent.trim()).filter(t => t.length > 0)
     )
-    
+
     const text = paragraphs.join('\n\n')
-    
+
     if (pageTitle) {
         return `${pageTitle}\n\n${text}`
     }

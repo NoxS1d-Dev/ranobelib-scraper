@@ -12,7 +12,7 @@ async function extract() {
 
     const chaptersData = JSON.parse(fs.readFileSync('chapters.json', 'utf8'))
     const metadata = JSON.parse(fs.readFileSync('metadata.json', 'utf8'))
-    
+
     const isMergeEnabled = process.env.MERGE_CHAPTERS === 'true'
     let mergedContent = ''
 
@@ -27,7 +27,7 @@ async function extract() {
     const browser = await createBrowser()
     let context = await browser.newContext()
     let page = await context.newPage()
-    
+
     try {
         const baseUrl = rawUrl.split('?')[0]
         await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 60000 })
@@ -39,7 +39,7 @@ async function extract() {
     let count = 0
 
     for (const chap of chaptersData) {
-        if (count > 0 && count % 20 === 0) {
+        if (count > 0 && count % 100 === 0) {
             logDebug(`Recreating browser context to prevent memory leak...`)
             await page.close()
             await context.close()
