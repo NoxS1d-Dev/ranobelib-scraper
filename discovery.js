@@ -26,8 +26,15 @@ async function discover() {
 
     const { chapters, metadata } = await parser.discover(page, rawUrl, chaptersRange, priorityTeams, isTargetChapter)
 
-    if (!chapters || chapters.length === 0 || !metadata) {
-        logError(`No chapters discovered or failed to get book metadata`)
+    if (!chapters || chapters.length === 0) {
+        logError(`No chapters discovered. Ensure the range is valid.`)
+        await browser.close()
+        process.exitCode = 1
+        return
+    }
+
+    if (!metadata || !metadata.slug) {
+        logError(`Failed to get book metadata.`)
         await browser.close()
         process.exitCode = 1
         return

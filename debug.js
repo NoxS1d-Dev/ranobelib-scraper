@@ -11,7 +11,7 @@ function logDebug(message) {
 }
 
 function logError(message) {
-    console.error(`[CRITICAL] ${message}`)
+    console.error(`[ERROR] ${message}`)
 }
 
 module.exports = { logInfo, logDebug, logError }
